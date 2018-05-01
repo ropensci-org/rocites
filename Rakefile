@@ -8,6 +8,7 @@ task :run do
   else 
     citations.each do |x|
       Rocites.tweet(x)
+      sleep rand(5..16)
     end
   end
 end
