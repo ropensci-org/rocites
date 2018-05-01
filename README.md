@@ -31,12 +31,12 @@ git push heroku master
 Set up env vars
 
 ```
-heroku config:set ROCITES_TWITTER_CONSUMER_KEY=ENV["ROCITES_TWITTER_CONSUMER_KEY"]
-heroku config:set ROCITES_TWITTER_CONSUMER_SECRET=ENV["ROCITES_TWITTER_CONSUMER_SECRET"]
-heroku config:set ROCITES_TWITTER_ACCESS_TOKEN=ENV["ROCITES_TWITTER_ACCESS_TOKEN"]
-heroku config:set ROCITES_TWITTER_ACCESS_SECRET=ENV["ROCITES_TWITTER_ACCESS_SECRET"]
-heroku config:set AWS_S3_WRITE_ACCESS_KEY=ENV["AWS_S3_WRITE_ACCESS_KEY"]
-heroku config:set AWS_S3_WRITE_SECRET_KEY=ENV["AWS_S3_WRITE_SECRET_KEY"]
+heroku config:set ROCITES_TWITTER_CONSUMER_KEY=key
+heroku config:set ROCITES_TWITTER_CONSUMER_SECRET=key
+heroku config:set ROCITES_TWITTER_ACCESS_TOKEN=key
+heroku config:set ROCITES_TWITTER_ACCESS_SECRET=key
+heroku config:set AWS_S3_WRITE_ACCESS_KEY=key
+heroku config:set AWS_S3_WRITE_SECRET_KEY=key
 ```
 
 Add the scheduler to your heroku app
