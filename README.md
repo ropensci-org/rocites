@@ -28,6 +28,17 @@ Push your app to Heroku
 git push heroku master
 ```
 
+Set up env vars
+
+```
+heroku config:set ROCITES_TWITTER_CONSUMER_KEY=ENV["ROCITES_TWITTER_CONSUMER_KEY"]
+heroku config:set ROCITES_TWITTER_CONSUMER_SECRET=ENV["ROCITES_TWITTER_CONSUMER_SECRET"]
+heroku config:set ROCITES_TWITTER_ACCESS_TOKEN=ENV["ROCITES_TWITTER_ACCESS_TOKEN"]
+heroku config:set ROCITES_TWITTER_ACCESS_SECRET=ENV["ROCITES_TWITTER_ACCESS_SECRET"]
+heroku config:set AWS_S3_WRITE_ACCESS_KEY=ENV["AWS_S3_WRITE_ACCESS_KEY"]
+heroku config:set AWS_S3_WRITE_SECRET_KEY=ENV["AWS_S3_WRITE_SECRET_KEY"]
+```
+
 Add the scheduler to your heroku app
 
 ```
@@ -40,19 +51,6 @@ Add the task ```rake run``` to your heroku scheduler and set to whatever schedul
 
 ## Usage
 
-If you have your repo in an env var as above, run the rake task `run`
+- `rake run` to check for new citations and send tweets for each
+- `rake new` to just check for new citations and print to the console, no tweets sent
 
-```
-rake run
-```
-
-If not, then pass the repo to `run` like
-
-```
-rake run repo=owner/repo
-```
-
-## Rake tasks
-
-* rake envs  # list env vars
-* rake run   # checks for new packages or new releases
