@@ -30,6 +30,7 @@ GEM
     mime-types (3.1)
       mime-types-data (~> 3.2015)
     mime-types-data (3.2016.0521)
+    multi_json (1.13.1)
     multipart-post (2.0.0)
     naught (1.1.0)
     public_suffix (3.0.2)
@@ -61,6 +62,7 @@ PLATFORMS
 DEPENDENCIES
   aws-s3 (~> 0.6.3)
   faraday (~> 0.15.0)
+  multi_json (~> 1.13, >= 1.13.1)
   rake (~> 12.3, >= 12.3.1)
   twitter (~> 6.2)
   uuid (~> 2.3, >= 2.3.8)
