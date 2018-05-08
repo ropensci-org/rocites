@@ -32,7 +32,7 @@ module Rocites
     puts 'sending tweet for "' + x["name"] + '"'
 
     if x["doi"].nil?
-      url = URI.extract(x["citation"])
+      url = URI.extract(x["citation"]).keep_if { |x| x.match(/https?/) }
       if url.empty?
         ""
       else
@@ -46,10 +46,11 @@ module Rocites
     tweet = clean_desc2(tweet)
 
     # if tweet already sent, skip
-    mytweets = $twitclient.user_timeline
+    mytweets = $twitclient.user_timeline;
     logg = []
     mytweets.each do |z|
-      logg << tweet.sub(/http.+/, '').casecmp(z.text.sub(/http.+/, '')) == 0
+      # logg << tweet.sub(/http.+/, '').casecmp(z.text.sub(/http.+/, '')) == 0
+      logg << tweet.casecmp(z.text) == 0
     end
     if logg.include?(0)
       puts 'skipping, tweet already sent'
