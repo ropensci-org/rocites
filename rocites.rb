@@ -42,7 +42,7 @@ module Rocites
       url = "https://doi.org/" + x["doi"].delete('\\"')
     end
 
-    tweet = "New @rOpenSci citation of our `%s` package - %s" % [x['name'], url]
+    tweet = "New @rOpenSci citation of our #rstats `%s` 📦 - %s" % [x['name'], url]
     tweet = clean_desc2(tweet)
 
     # if tweet already sent, skip
