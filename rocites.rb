@@ -109,6 +109,7 @@ module Rocites
 
     # check for any that have many pkgs for 1 citations & combine 
     cites = diffed.map { |e| e['citation'] }
+    notrep = []
     if cites.uniq.length != cites.length
       # the repeated citation
       repcit = cites.detect {|e| cites.count(e) > 1}
