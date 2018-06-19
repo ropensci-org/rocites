@@ -42,7 +42,16 @@ module Rocites
       url = "https://doi.org/" + x["doi"].delete('\\"')
     end
 
-    tweet = "New @rOpenSci citation of our #rstats `%s` 📦 - %s" % [x['name'], url]
+    # handle if > 1 pkg name
+    if !x['name'].match(/,/).nil?
+      # plural
+      nm = "%s 📦's " % x['name'].split(',').join(', ')
+    else
+      # singular
+      nm = "%s 📦 " % x['name']
+    end
+
+    tweet = "New @rOpenSci citation of our #rstats %s - %s" % [nm, url]
     tweet = clean_desc2(tweet)
 
     # if tweet already sent, skip
@@ -90,22 +99,36 @@ module Rocites
   # get new citations, if any
   def self.new_citations
     puts "getting citations from github"
-    ctz = self.get_citations
+    ctz = self.get_citations;
     puts "getting cached citations on s3"
-    s3dat = self.download_s3
+    s3dat = self.download_s3;
 
     # compare
-    diffed = ctz - s3dat
+    diffed = ctz - s3dat;
+    diffeds3 = Marshal.load(Marshal.dump(diffed));
+
+    # check for any that have many pkgs for 1 citations & combine 
+    cites = diffed.map { |e| e['citation'] }
+    if cites.uniq.length != cites.length
+      # the repeated citation
+      repcit = cites.detect {|e| cites.count(e) > 1}
+      reps = diffed.select { |e| e['citation'] == repcit }
+      pkgnames = reps.map { |e| e['name'] }
+      reps[0]['name'] = pkgnames.join(',')
+      # combine the two
+      notrep = diffed.select { |e| e['citation'] != repcit }
+      notrep.append(reps[0])
+    end
 
     # return any new, nil if no new ones
-    if diffed.empty?
+    if notrep.empty?
       return nil
     else 
       # upload to s3
       puts "uploading new citations to s3"
-      self.upload_s3(diffed)
+      self.upload_s3(diffeds3)
       # return for tweeting
-      return diffed
+      return notrep
     end
   end
 
