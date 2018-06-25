@@ -119,6 +119,8 @@ module Rocites
       # combine the two
       notrep = diffed.select { |e| e['citation'] != repcit }
       notrep.append(reps[0])
+    else
+      notrep = diffeds3
     end
 
     # return any new, nil if no new ones
