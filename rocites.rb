@@ -32,7 +32,7 @@ module Rocites
     puts 'sending tweet for "' + x["name"] + '"'
 
     if x["doi"].nil?
-      url = URI.extract(x["citation"]).keep_if { |x| x.match(/https?/) }
+      url = URI.extract(x["citation"], ['http', 'https']).keep_if { |x| x.match(/https?/) }
       if url.empty?
         ""
       else
