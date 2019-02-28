@@ -7,6 +7,7 @@ require 'csv'
 require 'uuid'
 require 'multi_json'
 require 'uri'
+require 'anystyle'
 
 # twitter setup
 $twitclient = Twitter::REST::Client.new do |config|
@@ -42,23 +43,77 @@ module Rocites
       url = "https://doi.org/" + x["doi"].delete('\\"')
     end
 
+    # authors
+    # x={"citation"=>"Amano, T., Lamming, J. D. L., & Sutherland, W. J. (2016). Spatial Gaps in Global Biodiversity Information and the Role of Citizen Science. BioScience, 66(5), 393–400. doi:10.1093/biosci/biw022"}
+    # x={"citation"=>"Wheeler, D. L., Scott, J., Dung, J. K. S., & Johnson, D. A. (2019). Evidence of a trans-kingdom plant disease complex between a fungus and plant-parasitic nematodes. PLOS ONE, 14(2), e0211508. <https://doi.org/10.1371/journal.pone.0211508>"}
+    # cit = x['citation']
+    tmp_auth = AnyStyle.parse x["citation"]
+    auths = tmp_auth[0][:author]
+    if auths.length > 2
+      authors = auths[0][:family].capitalize + " et al."
+    elsif auths.length == 2
+      authors = auths.map { |z| z[:family].capitalize }.join(" & ")
+    else
+      authors = auths[0][:family].capitalize
+    end
+
     # handle if > 1 pkg name
     if !x['name'].match(/,/).nil?
       # plural
-      nm = "%s 📦's " % x['name'].split(',').join(', ')
+      nm = "📦's " + x['name'].split(',').map{|w| "#" + w}.join(" ")
     else
       # singular
-      nm = "%s 📦 " % x['name']
+      nm = "📦 " + "#" + x['name']
     end
 
-    tweet = "New @rOpenSci citation of our #rstats %s - %s" % [nm, url]
+    # mentions
+    pkghandconn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropensci/roapi/master/data/package_handle_mapping.csv') do |f|
+      f.adapter Faraday.default_adapter
+    end
+    pkghand = pkghandconn.get;
+    pkghand.body.force_encoding(Encoding::UTF_8);
+    csv = CSV.parse(pkghand.body, :col_sep => ",", :quote_char => "|", :headers => true);
+    pkg_handle_hsh = csv.map {|a| Hash[ a ] };
+    pkgs = x['name'].split(',')
+    pkg_handle_res = pkg_handle_hsh.select { |z| pkgs.include?(z['package']) }
+    if pkg_handle_res.length != 0
+      handles = pkg_handle_res.map{ |x| "@" + x["handle"] }.join(" ")
+      handles = handles.length > 0 ? "| cc " + handles : ""
+    end
+
+    # research snippet
+    res_snip = x['research_snippet']
+    if res_snip.nil?
+      res_snip = "in their research"
+    else
+      res_snip = "in their work on " + res_snip
+    end
+
+    # image path
+    image_remote_path = File.basename(x['img_path'])
+    # eg image full URL
+    # https://raw.githubusercontent.com/ropensci/roapi/master/data/img/AielloEtal2019JournalOfNeurology.png
+    if !image_remote_path.nil?
+      image_remote_url = 
+        "https://raw.githubusercontent.com/ropensci/roapi/master/data/img/" +
+        image_remote_path
+      image_d = Faraday.new(:url => image_remote_url) do |f|
+        f.adapter Faraday.default_adapter
+      end
+      image_res = image_d.get;
+      File.open(image_remote_path, 'wb') { |fp| fp.write(image_res.body) }
+      # File.open(image_remote_path, 'wb') { |fp| fp.write(image_res.body) }
+    end
+
+    # build tweet
+    tweet = "New @rOpenSci citation: %s used #rstats %s %s %s %s" %
+      [authors, nm, res_snip, url, handles]
     tweet = clean_desc2(tweet)
 
     # if tweet already sent, skip
     mytweets = $twitclient.user_timeline;
     logg = []
     mytweets.each do |z|
-      # logg << tweet.sub(/http.+/, '').casecmp(z.text.sub(/http.+/, '')) == 0
       logg << tweet.casecmp(z.text) == 0
     end
     if logg.include?(0)
@@ -66,7 +121,13 @@ module Rocites
     else
       # not sent, sending it
       puts 'new citation for %s, sending tweet' % x["name"]
-      $twitclient.update(tweet)
+      if image_remote_path.nil?
+        $twitclient.update(tweet)
+      else
+        $twitclient.update_with_media(tweet, File.new(image_remote_path))
+        puts 'deleting file %s' % image_remote_path
+        File.delete(image_remote_path)
+      end
     end
   end
 
@@ -84,15 +145,17 @@ module Rocites
     return all_hashes
   end
 
-  # get ropensci/roapi citations.csv file, convert to array of hashes
+  # get ropensci/roapi citations.tsv file, convert to array of hashes
   def self.get_citations
-    conn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropensci/roapi/master/data/citations.csv') do |f|
+    conn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropensci/roapi/master/data/citations.tsv') do |f|
       f.adapter Faraday.default_adapter
     end
     x = conn.get;
     x.body.force_encoding(Encoding::UTF_8);
-    csv = CSV.parse(x.body, :col_sep => ";", :quote_char => "|", :headers => true);
-    hsh = csv.map {|a| Hash[ a ] };
+    tsv = CSV.parse(x.body, :col_sep => "\t", :headers => true);
+    hsh = tsv.map {|a| Hash[ a ] };
+    # convert NA's to nil's
+    hsh = hsh.map { |a| a.each { |k,v| a[k] = v == "NA" ? nil : v }  };
     return hsh
   end
 
@@ -108,7 +171,7 @@ module Rocites
     diffeds3 = Marshal.load(Marshal.dump(diffed));
 
     # check for any that have many pkgs for 1 citations & combine 
-    cites = diffed.map { |e| e['citation'] }
+    cites = diffed.map { |e| e['citation'] };
     notrep = []
     if cites.uniq.length != cites.length
       # the repeated citation
