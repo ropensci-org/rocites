@@ -5,7 +5,7 @@ Heroku robot to tweet new citations using rOpenSci software
 
 ## what it does
 
-* check if there are any new citations from <https://github.com/ropensci/roapi/blob/master/data/citations.csv> - and sends a tweet for each new citation
+* check if there are any new citations from <https://github.com/ropenscilabs/ropensci_citations/blob/master/citations.tsv> - and sends a tweet for each new citation
 
 ## Install
 
