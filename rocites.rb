@@ -2,12 +2,15 @@ require 'date'
 require 'time'
 require 'twitter'
 require 'faraday'
-require 'aws/s3'
 require 'csv'
 require 'uuid'
 require 'multi_json'
 require 'uri'
 require 'anystyle'
+require 'octokit'
+require 'base64'
+
+$send_tweets = true
 
 # twitter setup
 $twitclient = Twitter::REST::Client.new do |config|
@@ -17,11 +20,8 @@ $twitclient = Twitter::REST::Client.new do |config|
   config.access_token_secret = ENV["ROCITES_TWITTER_ACCESS_SECRET"]
 end
 
-# aws setup
-$s3 = AWS::S3::Base.establish_connection!(
-  :access_key_id     => ENV["AWS_S3_WRITE_ACCESS_KEY"], 
-  :secret_access_key => ENV["AWS_S3_WRITE_SECRET_KEY"]
-)
+# github octokit setup
+$ghc = Octokit::Client.new(:access_token => ENV["GITHUB_TOKEN_ROCITES"])
 
 module Rocites
   def self.clean_desc2(y)
@@ -31,6 +31,7 @@ module Rocites
 
   def self.tweet(x)
     puts 'sending tweet for "' + x["name"] + '"'
+    puts "send_tweets feature flag: %s" % $send_tweets
 
     if x["doi"].nil?
       url = URI.extract(x["citation"], ['http', 'https']).keep_if { |x| x.match(/https?/) }
@@ -67,7 +68,7 @@ module Rocites
     end
 
     # mentions
-    pkghandconn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropensci/roapi/master/data/package_handle_mapping.csv') do |f|
+    pkghandconn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/package_handle_mapping.csv') do |f|
       f.adapter Faraday.default_adapter
     end
     pkghand = pkghandconn.get;
@@ -92,10 +93,10 @@ module Rocites
     # image path
     image_remote_path = File.basename(x['img_path'])
     # eg image full URL
-    # https://raw.githubusercontent.com/ropensci/roapi/master/data/img/AielloEtal2019JournalOfNeurology.png
+    # https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/img/AielloEtal2019JournalOfNeurology.png
     if !image_remote_path.nil?
-      image_remote_url = 
-        "https://raw.githubusercontent.com/ropensci/roapi/master/data/img/" +
+      image_remote_url =
+        "https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/img/" +
         image_remote_path
       image_d = Faraday.new(:url => image_remote_url) do |f|
         f.adapter Faraday.default_adapter
@@ -121,33 +122,64 @@ module Rocites
     else
       # not sent, sending it
       puts 'new citation for %s, sending tweet' % x["name"]
-      if image_remote_path.nil?
-        $twitclient.update(tweet)
+      if $send_tweets
+        if image_remote_path.nil?
+          $twitclient.update(tweet)
+        else
+          $twitclient.update_with_media(tweet, File.new(image_remote_path))
+          puts 'deleting file %s' % image_remote_path
+          File.delete(image_remote_path)
+        end
       else
-        $twitclient.update_with_media(tweet, File.new(image_remote_path))
-        puts 'deleting file %s' % image_remote_path
-        File.delete(image_remote_path)
+        puts "not sent tweet: %s" % tweet
       end
     end
   end
 
   # upload x hashes to S3
-  def self.upload_s3(x)
-    x.each do |i|
-      AWS::S3::S3Object.store(UUID.generate + ".json", i.to_json, "rocites")
-    end
-  end
+  # def self.upload_s3(x)
+  #   x.each do |i|
+  #     AWS::S3::S3Object.store(UUID.generate + ".json", i.to_json, "rocites")
+  #   end
+  # end
 
   # download all objects in the rocites S3 bucket, convert to array of hashes
-  def self.download_s3
-    x = AWS::S3::Bucket.find('rocites')
-    all_hashes = x.map { |w| MultiJson.load(w.value.to_s) }
-    return all_hashes
+  # def self.download_s3
+  #   x = AWS::S3::Bucket.find('rocites')
+  #   all_hashes = x.map { |w| MultiJson.load(w.value.to_s) }
+  #   return all_hashes
+  # end
+
+  # upload json hashes to github
+  def self.upload_github(json_string, message)
+    $ghc.update_contents("ropenscilabs/ropensci_citations",
+      "citations_used.json",
+      message,
+      $downloaded_github_used_citations_sha,
+      json_string,
+      :branch => "master")
   end
 
-  # get ropensci/roapi citations.tsv file, convert to array of hashes
+  def self.upload_used_citations(x)
+    n_new = x.length;
+    x = $downloaded_github_used_citations + x;
+    json_pl = MultiJson.dump(x, :pretty => true);
+    self.upload_github(json_pl, "from rocites: adding %s new citations" % n_new)
+  end
+
+  # download all used citations from github ropensci_citaitons repo
+  def self.download_used_citations
+    citjson = $ghc.contents "ropenscilabs/ropensci_citations", path:"citations_used.json";
+    $downloaded_github_used_citations_sha = citjson[:sha]
+    txt = Base64.decode64(citjson.content);
+    hsh = MultiJson.load(txt);
+    $downloaded_github_used_citations = hsh;
+    return hsh
+  end
+
+  # get ropenscilabs/ropensci_citations citations.tsv file, convert to array of hashes
   def self.get_citations
-    conn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropensci/roapi/master/data/citations.tsv') do |f|
+    conn = Faraday.new(:url => 'https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/citations.tsv') do |f|
       f.adapter Faraday.default_adapter
     end
     x = conn.get;
@@ -163,39 +195,72 @@ module Rocites
   def self.new_citations
     puts "getting citations from github"
     ctz = self.get_citations;
-    puts "getting cached citations on s3"
-    s3dat = self.download_s3;
+    puts "getting cached citations on github"
+    usedcit = self.download_used_citations;
 
     # compare
-    diffed = ctz - s3dat;
-    diffeds3 = Marshal.load(Marshal.dump(diffed));
+    diffed = ctz - usedcit;
+    diffednew = Marshal.load(Marshal.dump(diffed));
 
-    # check for any that have many pkgs for 1 citations & combine 
+    # check for any that have many pkgs for 1 citations & combine
     cites = diffed.map { |e| e['citation'] };
     notrep = []
     if cites.uniq.length != cites.length
       # the repeated citation
       repcit = cites.detect {|e| cites.count(e) > 1}
-      reps = diffed.select { |e| e['citation'] == repcit }
-      pkgnames = reps.map { |e| e['name'] }
-      reps[0]['name'] = pkgnames.join(',')
+      reps = diffed.select { |e| e['citation'] == repcit };
+      pkgnames = reps.map { |e| e['name'] };
+      reps[0]['name'] = pkgnames.join(',');
       # combine the two
-      notrep = diffed.select { |e| e['citation'] != repcit }
-      notrep.append(reps[0])
+      notrep = diffed.select { |e| e['citation'] != repcit };
+      notrep.append(reps[0]);
     else
-      notrep = diffeds3
+      notrep = diffednew
     end
 
     # return any new, nil if no new ones
     if notrep.empty?
       return nil
-    else 
-      # upload to s3
-      puts "uploading new citations to s3"
-      self.upload_s3(diffeds3)
+    else
+      # upload to github
+      puts "uploading new citations to github"
+      self.upload_used_citations(diffednew)
       # return for tweeting
       return notrep
     end
+  end
+
+  # doi = "10.1186/s12864-019-5516-5"
+  # Rocites.find_citation_by_doi(doi)
+  def self.find_citation_by_doi(doi)
+    cites = self.download_used_citations;
+    res = cites.select do |w|
+      if w["doi"].nil?
+        false
+      else
+        !w["doi"].match("#{doi}").nil?
+      end
+    end
+    if res.nil?
+      return nil
+    else
+      return res
+    end
+  end
+
+  # doi = "10.1186/s12864-019-5516-5"
+  # Rocites.delete_citation_by_doi(doi)
+  def self.delete_citation_by_doi(doi)
+    cites = self.download_used_citations;
+    cites.keep_if do |w|
+      if w["doi"].nil?
+        true
+      else
+        w["doi"].match("#{doi}").nil?
+      end
+    end
+    json_alt = MultiJson.dump(cites, :pretty => true);
+    self.upload_github(json_alt, "deleted citation: %s" % doi)
   end
 
 end
