@@ -91,19 +91,22 @@ module Rocites
     end
 
     # image path
-    image_remote_path = File.basename(x['img_path'])
-    # eg image full URL
-    # https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/img/AielloEtal2019JournalOfNeurology.png
-    if !image_remote_path.nil?
-      image_remote_url =
-        "https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/img/" +
-        image_remote_path
-      image_d = Faraday.new(:url => image_remote_url) do |f|
-        f.adapter Faraday.default_adapter
+    if !x['img_path'].nil?
+      image_remote_path = File.basename(x['img_path'])
+      # eg image full URL
+      # https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/img/AielloEtal2019JournalOfNeurology.png
+      if !image_remote_path.nil?
+        image_remote_url =
+          "https://raw.githubusercontent.com/ropenscilabs/ropensci_citations/master/img/" +
+          image_remote_path
+        image_d = Faraday.new(:url => image_remote_url) do |f|
+          f.adapter Faraday.default_adapter
+        end
+        image_res = image_d.get;
+        File.open(image_remote_path, 'wb') { |fp| fp.write(image_res.body) }
       end
-      image_res = image_d.get;
-      File.open(image_remote_path, 'wb') { |fp| fp.write(image_res.body) }
-      # File.open(image_remote_path, 'wb') { |fp| fp.write(image_res.body) }
+    else
+      image_remote_path = nil
     end
 
     # build tweet
