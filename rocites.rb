@@ -47,15 +47,25 @@ module Rocites
     # authors
     # x={"citation"=>"Amano, T., Lamming, J. D. L., & Sutherland, W. J. (2016). Spatial Gaps in Global Biodiversity Information and the Role of Citizen Science. BioScience, 66(5), 393–400. doi:10.1093/biosci/biw022"}
     # x={"citation"=>"Wheeler, D. L., Scott, J., Dung, J. K. S., & Johnson, D. A. (2019). Evidence of a trans-kingdom plant disease complex between a fungus and plant-parasitic nematodes. PLOS ONE, 14(2), e0211508. <https://doi.org/10.1371/journal.pone.0211508>"}
+    # x={"citation"=>"Amano, T., & Sutherland, W. J. (2016). Spatial Gaps in Global Biodiversity Information and the Role of Citizen Science. BioScience, 66(5), 393–400. doi:10.1093/biosci/biw022"}
+    # cit = x['citation']
+    # x={"citation"=>"Iqbal. (2019). Managerial Self-Attribution Bias and Banks’ Future Performance: Evidence from Emerging Economies. Journal of Risk and Financial Management, 12(2), 73. <https://doi.org/10.3390/jrfm12020073>"}
+    # x={"citation"=>"Iqbal, J. (2019). Managerial Self-Attribution Bias and Banks’ Future Performance: Evidence from Emerging Economies. Journal of Risk and Financial Management, 12(2), 73. <https://doi.org/10.3390/jrfm12020073>"}
     # cit = x['citation']
     tmp_auth = AnyStyle.parse x["citation"]
     auths = tmp_auth[0][:author]
     if auths.length > 2
-      authors = auths[0][:family].capitalize + " et al."
+      authors = auths[0][:family] || "they"
+      authors = authors.match(/they/).nil? ? authors.capitalize + " et al." : authors
     elsif auths.length == 2
-      authors = auths.map { |z| z[:family].capitalize }.join(" & ")
+      if auths.map { |z| z[:family] }.compact.length != 2
+        authors = "they"
+      else
+        authors = auths.map { |z| z[:family].capitalize }.join(" & ")
+      end
     else
-      authors = auths[0][:family].capitalize
+      authors = auths[0][:family] || "they"
+      authors = authors.match(/they/).nil? ? authors.capitalize : authors
     end
 
     # handle if > 1 pkg name
