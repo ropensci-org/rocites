@@ -9,7 +9,7 @@ GEM
       namae (~> 1.0)
       wapiti (~> 1.0, >= 1.0.2)
     anystyle-data (1.2.0)
-    bibtex-ruby (5.0.0)
+    bibtex-ruby (5.1.1)
       latex-decode (~> 0.0)
     buftok (0.2.0)
     builder (3.2.3)
